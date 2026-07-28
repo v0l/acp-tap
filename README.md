@@ -12,6 +12,12 @@ client ◀─stdout── acp-tap ◀── agent
                      └──▶ unix socket ──▶ acp-tapd ──websocket──▶ browser
 ```
 
+![The acp-tap dashboard](docs/dashboard.png)
+
+Streamed thinking and message chunks are merged into blocks, `tool_call_update` folds into its
+tool call with the command, output and exit code, and prompts collapse to the tail — where the
+message that triggered the turn actually is.
+
 Agent-agnostic: anything speaking ACP over stdio works — pi, Claude Code, Codex, goose, OpenCode,
 Gemini CLI. Client-agnostic too: Zed, an editor, or a headless harness.
 
@@ -90,6 +96,18 @@ Every wrapped process shows up in the sidebar as soon as it sends its first fram
 `acp-tapd` binds to loopback and serves no authentication, because agent traffic contains prompts,
 file paths and command output. Do not expose it. If you need remote access, put it behind a reverse
 proxy that authenticates, or forward the port over SSH.
+
+## Development
+
+The dashboard is a Preact app in `web/`. To iterate on it without running real agents:
+
+```bash
+acp-tapd --socket /tmp/acp-tap-mock.sock --listen 127.0.0.1:9112 &
+scripts/mock-feed.py --socket /tmp/acp-tap-mock.sock --hold 900
+```
+
+That produces the state in the screenshot above: one agent mid-turn, one that hit a protocol
+error, and a completed review with shell output. Then `cd web && bun run dev`.
 
 ## Licence
 

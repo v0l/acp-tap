@@ -42,6 +42,17 @@ function eventText(e: UiEvent): string {
 /** How far back to look for the tool call a `tool_update` belongs to. */
 const TOOL_LOOKBACK = 200
 
+/**
+ * How far back to look for the streaming block a chunk continues. Agents run
+ * concurrently, so another agent's rows routinely land between two chunks of
+ * the same message; only the same agent's own rows terminate a stream.
+ */
+const MERGE_LOOKBACK = 200
+
+function sameStream(b: Block, e: UiEvent): boolean {
+  return b.label === e.label && b.session_id === e.session_id
+}
+
 /** Fold one event into the block list, merging streamed chunks. */
 export function pushEvent(e: UiEvent, list: Block[]): Block[] {
   const text = eventText(e)
@@ -71,23 +82,29 @@ export function pushEvent(e: UiEvent, list: Block[]): Block[] {
     return list
   }
 
-  const last = list[list.length - 1]
+  if (mergeable(e.kind)) {
+    // Walk back past interleaved rows from *other* agents/sessions to find this
+    // agent's own most recent row: that alone decides whether this chunk is a
+    // continuation. Merging into the global tail would only ever work when a
+    // single agent is talking.
+    const from = Math.max(0, list.length - MERGE_LOOKBACK)
+    for (let i = list.length - 1; i >= from; i--) {
+      const b = list[i]
+      if (!sameStream(b, e)) continue
 
-  if (
-    last &&
-    mergeable(e.kind) &&
-    last.kind === e.kind &&
-    last.label === e.label &&
-    last.session_id === e.session_id &&
-    e.ts_ms - last.ts_ms < MERGE_WINDOW_MS
-  ) {
-    const merged: Block = {
-      ...last,
-      text: last.text + text,
-      ts_ms: e.ts_ms,
-      chunks: last.chunks + 1
+      if (b.kind === e.kind && e.ts_ms - b.ts_ms < MERGE_WINDOW_MS) {
+        const merged: Block = {
+          ...b,
+          text: b.text + text,
+          ts_ms: e.ts_ms,
+          chunks: b.chunks + 1
+        }
+        return [...list.slice(0, i), merged, ...list.slice(i + 1)]
+      }
+      // The agent said something else since (tool call, new turn, thought vs
+      // message): the previous stream is closed, start a fresh block.
+      break
     }
-    return [...list.slice(0, -1), merged]
   }
 
   const block: Block = {

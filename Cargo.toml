@@ -1,6 +1,6 @@
 [package]
 name = "acp-tap"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Transparent ACP proxy with a live web dashboard for agent sessions"
 license = "MIT"

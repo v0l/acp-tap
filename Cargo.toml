@@ -1,0 +1,20 @@
+[package]
+name = "acp-tap"
+version = "0.1.0"
+edition = "2024"
+description = "Transparent ACP proxy with a live web dashboard for agent sessions"
+license = "MIT"
+repository = "https://github.com/v0l/acp-tap"
+keywords = ["acp", "agent-client-protocol", "dashboard", "observability"]
+categories = ["development-tools", "command-line-utilities"]
+
+[dependencies]
+anyhow = "1.0.104"
+axum = { version = "0.8.9", features = ["ws"] }
+clap = { version = "4.6.1", features = ["derive", "env"] }
+futures-util = "0.3.33"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "io-util", "net", "process", "sync", "time", "io-std"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

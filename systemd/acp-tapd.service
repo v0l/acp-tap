@@ -1,0 +1,29 @@
+[Unit]
+Description=ACP tap dashboard
+Documentation=https://github.com/v0l/acp-tap
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/acp-tapd
+Restart=always
+RestartSec=2
+
+# Defaults; override with `systemctl --user edit acp-tapd`.
+Environment=ACP_TAPD_LISTEN=127.0.0.1:9111
+Environment=ACP_TAPD_HISTORY=500
+# ACP_TAP_SOCKET defaults to $XDG_RUNTIME_DIR/acp-tap.sock, which is where
+# acp-tap looks unless told otherwise.
+
+# The dashboard only reads a unix socket and serves HTTP; it needs nothing else.
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=default.target

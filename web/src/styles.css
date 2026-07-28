@@ -430,3 +430,80 @@ main h1 {
   border-color: var(--tool);
   color: var(--tool);
 }
+
+/* ── tool calls ──────────────────────────────────────────── */
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tool-title {
+  color: var(--tool);
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+
+.tool-output {
+  margin: 5px 0 2px;
+  padding: 7px 10px;
+  background: #0d1016;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+  border-radius: 4px;
+  color: var(--dim);
+  font: 12px/1.45 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.row.tool.failed .tool-output {
+  border-left-color: var(--error);
+}
+
+.chip.exit.ok {
+  color: var(--message);
+  border-color: transparent;
+  background: var(--raised);
+}
+
+.chip.exit.bad {
+  color: var(--error);
+  border-color: transparent;
+  background: var(--raised);
+}
+
+.more {
+  background: none;
+  border: 0;
+  color: var(--faint);
+  font: 11px var(--mono);
+  padding: 2px 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.more:hover {
+  color: var(--tool);
+}
+
+/* ── prompts ─────────────────────────────────────────────── */
+
+.prompt-body {
+  margin: 5px 0 2px;
+  padding: 8px 11px;
+  background: #0d1016;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--faint);
+  border-radius: 4px;
+  color: var(--dim);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 440px;
+  overflow-y: auto;
+}

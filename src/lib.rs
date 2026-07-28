@@ -54,6 +54,15 @@ pub enum EventKind {
     ToolUpdate {
         tool_id: String,
         status: String,
+        /// Present once the agent has streamed enough arguments to name the
+        /// command; the opening `tool_call` usually carries only the tool name.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        /// Incremental output: terminal deltas, or tool result content.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i64>,
     },
     Plan {
         entries: usize,
@@ -182,7 +191,11 @@ pub fn parse_frame(frame: &WireFrame) -> Vec<(Option<String>, EventKind)> {
             vec![(
                 session_id,
                 EventKind::TurnStarted {
-                    text: truncate(&text, 2000),
+                    // Harnesses re-send their whole system prompt as user text
+                    // on every turn for protocol-v1 agents, so the interesting
+                    // part — the new message — is at the end. Keep enough to
+                    // show it, and let the UI collapse the boilerplate.
+                    text: truncate(&text, 32_000),
                 },
             )]
         }
@@ -231,18 +244,53 @@ pub fn parse_frame(frame: &WireFrame) -> Vec<(Option<String>, EventKind)> {
                         .unwrap_or("pending")
                         .to_string(),
                 },
-                "tool_call_update" => EventKind::ToolUpdate {
-                    tool_id: update
-                        .get("toolCallId")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    status: update
-                        .get("status")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                },
+                "tool_call_update" => {
+                    let meta = update.get("_meta");
+                    // Shell tools stream deltas through `_meta.terminal_output`;
+                    // other tools return content blocks.
+                    let terminal_output = meta
+                        .and_then(|m| m.get("terminal_output"))
+                        .and_then(|t| t.get("data"))
+                        .and_then(|d| d.as_str())
+                        .map(str::to_string);
+                    let content_output = update
+                        .get("content")
+                        .and_then(|c| c.as_array())
+                        .map(|blocks| {
+                            blocks
+                                .iter()
+                                .filter_map(|b| {
+                                    b.get("content")
+                                        .and_then(|c| c.get("text"))
+                                        .and_then(|t| t.as_str())
+                                })
+                                .collect::<Vec<_>>()
+                                .join("")
+                        })
+                        .filter(|s| !s.is_empty());
+
+                    EventKind::ToolUpdate {
+                        tool_id: update
+                            .get("toolCallId")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        status: update
+                            .get("status")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        title: update
+                            .get("title")
+                            .and_then(|t| t.as_str())
+                            .map(str::to_string),
+                        output: terminal_output.or(content_output),
+                        exit_code: meta
+                            .and_then(|m| m.get("terminal_exit"))
+                            .and_then(|e| e.get("exit_code"))
+                            .and_then(|c| c.as_i64()),
+                    }
+                }
                 "plan" => EventKind::Plan {
                     entries: update
                         .get("entries")
@@ -293,6 +341,34 @@ mod tests {
         let out = parse_frame(&frame(l));
         assert!(
             matches!(&out[0].1, EventKind::ToolCall { tool_id, title, .. } if tool_id == "t1" && title == "bash")
+        );
+    }
+
+    #[test]
+    fn tool_update_carries_command_output_and_exit() {
+        let l = r#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"bash_0","status":"completed","title":"git status --short","_meta":{"terminal_output":{"terminal_id":"bash_0","data":"M src/lib.rs\n"},"terminal_exit":{"terminal_id":"bash_0","exit_code":0}}}}}"#;
+        let out = parse_frame(&frame(l));
+        match &out[0].1 {
+            EventKind::ToolUpdate {
+                title,
+                output,
+                exit_code,
+                ..
+            } => {
+                assert_eq!(title.as_deref(), Some("git status --short"));
+                assert_eq!(output.as_deref(), Some("M src/lib.rs\n"));
+                assert_eq!(*exit_code, Some(0));
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tool_update_reads_content_blocks_for_non_shell_tools() {
+        let l = r#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"read_1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"file body"}}]}}}"#;
+        let out = parse_frame(&frame(l));
+        assert!(
+            matches!(&out[0].1, EventKind::ToolUpdate { output, .. } if output.as_deref() == Some("file body"))
         );
     }
 

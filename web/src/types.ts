@@ -20,6 +20,8 @@ export interface UiEvent {
   title?: string
   tool_kind?: string
   status?: string
+  output?: string
+  exit_code?: number
   stop_reason?: string
   message?: string
   entries?: number
@@ -55,6 +57,9 @@ export interface Block {
   toolId?: string
   toolKind?: string
   status?: string
+  /** accumulated stdout/stderr or tool result text */
+  output?: string
+  exitCode?: number
   /** number of chunks merged, for a subtle density hint */
   chunks: number
 }

@@ -52,16 +52,81 @@ function AgentRow({ agent, tick }: { agent: Agent; tick: number }) {
   )
 }
 
+const OUTPUT_PREVIEW_LINES = 12
+
 function ToolBlock({ block }: { block: Block }) {
   const status = block.status ?? 'pending'
+  const open = useSignal(false)
+  const output = block.output?.replace(/\s+$/, '') ?? ''
+  const lines = output ? output.split('\n') : []
+  const clipped = lines.length > OUTPUT_PREVIEW_LINES
+  const shown = open.value || !clipped ? lines : lines.slice(0, OUTPUT_PREVIEW_LINES)
+
   return (
     <div class={`row tool ${status}`}>
       <span class="ts">{clock(block.ts_ms)}</span>
       <span class="gutter">⚒</span>
       <div class="content">
-        <span class="tool-title">{block.text}</span>
-        {block.toolKind && <span class="chip">{block.toolKind}</span>}
-        <span class={`chip status ${status}`}>{status}</span>
+        <div class="tool-head">
+          <code class="tool-title">{block.text}</code>
+          {block.toolKind && <span class="chip">{block.toolKind}</span>}
+          <span class={`chip status ${status}`}>{status}</span>
+          {block.exitCode !== undefined && block.exitCode !== null && (
+            <span class={`chip exit ${block.exitCode === 0 ? 'ok' : 'bad'}`}>
+              exit {block.exitCode}
+            </span>
+          )}
+        </div>
+
+        {shown.length > 0 && (
+          <pre class="tool-output">
+            {shown.join('\n')}
+            {clipped && !open.value && '\n…'}
+          </pre>
+        )}
+
+        {clipped && (
+          <button class="more" onClick={() => (open.value = !open.value)}>
+            {open.value ? 'collapse' : `show all ${lines.length} lines`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Lines of a prompt shown before collapsing. */
+const PROMPT_TAIL_LINES = 14
+
+/**
+ * Prompts arrive with the harness's entire system prompt prepended on every
+ * turn, so the message that actually triggered the turn is at the very end.
+ * Show the tail, offer the rest.
+ */
+function PromptBlock({ block, showLabel }: { block: Block; showLabel: boolean }) {
+  const open = useSignal(false)
+  const lines = block.text.split('\n')
+  const clipped = lines.length > PROMPT_TAIL_LINES
+  const shown = open.value || !clipped ? lines : lines.slice(-PROMPT_TAIL_LINES)
+
+  return (
+    <div class="row turn_started">
+      <span class="ts">{clock(block.ts_ms)}</span>
+      <span class="gutter">▸</span>
+      <div class="content">
+        <div class="tool-head">
+          {showLabel && <span class="who">{block.label}</span>}
+          <span class="kindtag">prompt</span>
+          {clipped && !open.value && (
+            <span class="chip">tail of {lines.length} lines</span>
+          )}
+        </div>
+        <pre class="prompt-body">{shown.join('\n')}</pre>
+        {clipped && (
+          <button class="more" onClick={() => (open.value = !open.value)}>
+            {open.value ? 'collapse' : `show full prompt (${lines.length} lines)`}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -69,6 +134,7 @@ function ToolBlock({ block }: { block: Block }) {
 
 function Row({ block, showLabel }: { block: Block; showLabel: boolean }) {
   if (block.kind === 'tool_call') return <ToolBlock block={block} />
+  if (block.kind === 'turn_started') return <PromptBlock block={block} showLabel={showLabel} />
 
   const gutter: Record<string, string> = {
     thought: '',

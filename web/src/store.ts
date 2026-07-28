@@ -55,7 +55,12 @@ export function pushEvent(e: UiEvent, list: Block[]): Block[] {
       if (b.kind === 'tool_call' && b.toolId === e.tool_id && b.label === e.label) {
         const updated: Block = {
           ...b,
+          // The opening tool_call often knows only the tool name; the command
+          // itself arrives here once the agent has streamed its arguments.
+          text: e.title && e.title !== b.text ? e.title : b.text,
           status: e.status ?? b.status,
+          output: e.output ? (b.output ?? '') + e.output : b.output,
+          exitCode: e.exit_code ?? b.exitCode,
           ts_ms: e.ts_ms,
           chunks: b.chunks + 1
         }

@@ -34,8 +34,12 @@ systemctl --user enable --now acp-tapd
 Or build it:
 
 ```bash
+cd web && bun install && bun run build   # only when changing the UI
 cargo install --path .
 ```
+
+The dashboard is a Preact app built by Vite into a single `static/index.html`, which the binary
+embeds with `include_str!` — the built file is committed, so a Rust-only build needs no Node.
 
 ## Use
 

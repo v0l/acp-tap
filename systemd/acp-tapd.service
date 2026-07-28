@@ -15,15 +15,14 @@ Environment=ACP_TAPD_HISTORY=500
 # ACP_TAP_SOCKET defaults to $XDG_RUNTIME_DIR/acp-tap.sock, which is where
 # acp-tap looks unless told otherwise.
 
-# The dashboard only reads a unix socket and serves HTTP; it needs nothing else.
+# Modest hardening. ProtectSystem/ProtectHome are deliberately absent: the tap
+# socket lives in $XDG_RUNTIME_DIR, which they remount read-only for user units.
 NoNewPrivileges=true
-PrivateTmp=false
-ProtectSystem=strict
-ProtectHome=read-only
 RestrictNamespaces=true
 RestrictSUIDSGID=true
 MemoryDenyWriteExecute=true
 SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=default.target

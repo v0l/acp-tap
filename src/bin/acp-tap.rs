@@ -73,29 +73,38 @@ async fn mirror_task(socket: String, mut rx: mpsc::Receiver<WireFrame>) {
     let mut backoff_ms = 250u64;
 
     while let Some(frame) = rx.recv().await {
-        if stream.is_none() {
-            match UnixStream::connect(&socket).await {
-                Ok(s) => {
-                    stream = Some(s);
-                    backoff_ms = 250;
-                }
-                Err(_) => {
-                    // Dashboard down: drop this frame, throttle reconnect attempts.
-                    tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
-                    backoff_ms = (backoff_ms * 2).min(10_000);
-                    continue;
-                }
-            }
-        }
-
-        let Some(s) = stream.as_mut() else { continue };
         let Ok(mut payload) = serde_json::to_vec(&frame) else {
             continue;
         };
         payload.push(b'\n');
 
-        if s.write_all(&payload).await.is_err() {
-            stream = None; // reconnect on the next frame
+        // Two attempts: a dashboard restart kills the existing connection, and
+        // the failing write is typically the first frame of a new turn. Dropping
+        // it would silently lose the prompt that started the turn.
+        for attempt in 0..2 {
+            if stream.is_none() {
+                match UnixStream::connect(&socket).await {
+                    Ok(s) => {
+                        stream = Some(s);
+                        backoff_ms = 250;
+                    }
+                    Err(_) => {
+                        // Dashboard absent: throttle, then drop the frame.
+                        tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                        backoff_ms = (backoff_ms * 2).min(10_000);
+                        break;
+                    }
+                }
+            }
+
+            let Some(s) = stream.as_mut() else { break };
+            if s.write_all(&payload).await.is_ok() {
+                break;
+            }
+
+            // Stale connection: reconnect and retry this same frame once.
+            stream = None;
+            let _ = attempt;
         }
     }
 }
